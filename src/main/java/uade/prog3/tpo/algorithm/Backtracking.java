@@ -155,4 +155,145 @@ public class Backtracking {
         caminoActual.remove(caminoActual.size() - 1);
         visitados[actual] = false;
     }
+
+    /**
+     * Resultado de comparar la busqueda con y sin poda.
+     */
+    public record EstadisticasPoda(
+            long estadosConPoda,
+            long estadosSinPoda,
+            long rutasValidasConPoda,
+            long rutasValidasSinPoda) {
+    }
+
+    /**
+     * Compara ambas estrategias sobre el mismo grafo.
+     * No modifica el funcionamiento de rutasSimples().
+     */
+    public EstadisticasPoda compararPoda(
+            Grafo grafo,
+            String origenId,
+            String destinoId,
+            double costoMaximo,
+            int saltosMaximos) {
+
+        if (!Double.isFinite(costoMaximo)
+                || costoMaximo < 0
+                || saltosMaximos < 0) {
+            throw new IllegalArgumentException(
+                    "Los limites deben ser validos y no negativos");
+        }
+
+        int origen = grafo.indiceDe(origenId);
+        int destino = grafo.indiceDe(destinoId);
+
+        for (int i = 0; i < grafo.cantidadVertices(); i++) {
+            for (Grafo.Arista arista : grafo.vecinos(i)) {
+                if (!Double.isFinite(arista.costo())
+                        || arista.costo() < 0) {
+                    throw new IllegalArgumentException(
+                            "Las distancias deben ser finitas y no negativas");
+                }
+            }
+        }
+
+        long[] conPoda = new long[2];
+        long[] sinPoda = new long[2];
+
+        medirRecursivo(
+                grafo, origen, destino,
+                costoMaximo, saltosMaximos,
+                0, 0,
+                new boolean[grafo.cantidadVertices()],
+                true, conPoda);
+
+        medirRecursivo(
+                grafo, origen, destino,
+                costoMaximo, saltosMaximos,
+                0, 0,
+                new boolean[grafo.cantidadVertices()],
+                false, sinPoda);
+
+        return new EstadisticasPoda(
+                conPoda[0],
+                sinPoda[0],
+                conPoda[1],
+                sinPoda[1]);
+    }
+
+    /**
+     * contadores[0]: estados explorados.
+     * contadores[1]: rutas validas encontradas.
+     */
+    private void medirRecursivo(
+            Grafo grafo,
+            int actual,
+            int destino,
+            double costoMaximo,
+            int saltosMaximos,
+            double costoActual,
+            int saltosActuales,
+            boolean[] visitados,
+            boolean usarPoda,
+            long[] contadores) {
+
+        // Cada llamada recursiva representa un estado explorado.
+        contadores[0]++;
+
+        // Con poda: descartar inmediatamente estados inviables.
+        if (usarPoda
+                && (costoActual > costoMaximo
+                        || saltosActuales > saltosMaximos)) {
+            return;
+        }
+
+        visitados[actual] = true;
+
+        if (actual == destino) {
+
+            // Ambas estrategias cuentan solo rutas validas.
+            if (costoActual <= costoMaximo
+                    && saltosActuales <= saltosMaximos) {
+                contadores[1]++;
+            }
+
+        } else {
+
+            for (Grafo.Arista arista : grafo.vecinos(actual)) {
+
+                int vecino = arista.destino();
+
+                if (visitados[vecino]) {
+                    continue;
+                }
+
+                double nuevoCosto = costoActual + arista.costo();
+
+                int nuevosSaltos = saltosActuales + 1;
+
+                // La estrategia con poda evita generar
+                // estados que ya superan las restricciones.
+                if (usarPoda
+                        && (nuevoCosto > costoMaximo
+                                || nuevosSaltos > saltosMaximos)) {
+                    continue;
+                }
+
+                medirRecursivo(
+                        grafo,
+                        vecino,
+                        destino,
+                        costoMaximo,
+                        saltosMaximos,
+                        nuevoCosto,
+                        nuevosSaltos,
+                        visitados,
+                        usarPoda,
+                        contadores);
+            }
+        }
+
+        // Retroceso.
+        visitados[actual] = false;
+    }
 }
